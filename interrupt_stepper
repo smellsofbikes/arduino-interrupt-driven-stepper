@@ -1,0 +1,77 @@
+#include <LiquidCrystal.h>
+
+volatile byte on = 1;           // output control, currently constant
+volatile bool dir = HIGH;       // direction control, currently constant
+volatile word delaytime;        // derived from ADC, determines motor speed
+volatile byte timercount = 0;   // how many times did timer2 overflow
+volatile signed int pointer = 0;// pointer to states[] array
+static int states[8] = {1, 5, 4, 6, 2, 10, 8, 9}; // half-step drive
+int debug = 0;                  // if 1, serial output for diags
+volatile bool debugflag = LOW;  // if high, updates serial output only on timer2
+LiquidCrystal lcd(2,3,4,5,6,7);
+  
+void setup() {
+   DDRB = DDRB | B00001111;                    // digital pins 8-11 output, to motor
+   TIMSK2 = (TIMSK2 & B11111110) | B00000001;  // set up timer2 to interrupt
+   TCCR2B = (TCCR2B & B11111000) | B00000011;  // sets clock divisor /64
+   ADMUX = B01100101;  //+5V comparison, left-adjust, adc5
+   ADCSRA = B11100110;  //enable, start, auto-run, 
+   if (debug) Serial.begin(9600);
+   lcd.begin(20,4);
+}
+  
+void loop() {
+  char buf[5] = "";
+  if (debug)
+  {
+    Serial.print("timercount: ");
+    Serial.println(timercount);
+    Serial.print("ADCH: ");
+    Serial.println(ADCH);
+    if (debugflag)
+    {
+      Serial.print("Pointer: ");
+      Serial.println(pointer);
+      Serial.print("State: ");
+      Serial.println(states[pointer]);
+      debugflag = LOW;
+    }
+  }
+  lcd.setCursor(0,1);
+  lcd.write("Feed: ");
+  itoa(64-(ADCH/4), buf, 10);
+  lcd.write(buf);
+  lcd.setCursor(0,2);
+  lcd.write("Dir: ");
+  lcd.write(dir ? "Right" : "Left ");
+  lcd.setCursor(0,3);
+  lcd.write(on ? "On " : "Off");
+}
+  
+  
+ISR(TIMER2_OVF_vect){
+   if (timercount++ >= ADCH/4)      // if timer overflow count exceeds speed knob
+   {
+    if (debug) debugflag = HIGH;  // drive pointer/states only when ISR triggered
+    timercount = 0;               // start timer overflow counter over
+    if (on)
+    {
+      if (dir)  // moving to the left
+      {
+        if (++pointer > 7)       // check for overflow
+        {
+          pointer = 0;           // reset overflow
+        }
+        PORTB = states[pointer]; // write to pins
+      }
+      else  // moving to the right
+      {
+        if (--pointer < 0)
+        {
+          pointer = 7;
+        }
+        PORTB = states[pointer];
+      }
+    }
+  }
+}
