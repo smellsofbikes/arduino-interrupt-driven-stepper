@@ -1,6 +1,6 @@
 #include <LiquidCrystal.h>
 
-volatile byte on = 1;           // output control, currently constant
+volatile bool on = HIGH;           // output control, currently constant
 volatile bool dir = HIGH;       // direction control, currently constant
 volatile word delaytime;        // derived from ADC, determines motor speed
 volatile byte timercount = 0;   // how many times did timer2 overflow
@@ -8,12 +8,16 @@ volatile signed int pointer = 0;// pointer to states[] array
 static int states[8] = {1, 5, 4, 6, 2, 10, 8, 9}; // half-step drive
 int debug = 0;                  // if 1, serial output for diags
 volatile bool debugflag = LOW;  // if high, updates serial output only on timer2
+unsigned long DirTime;
+unsigned long OnTime;
+volatile int DirReading, PrevDirReading = LOW, OnReading, PrevOnReading = LOW;
+unsigned long debounce = 40;
 LiquidCrystal lcd(2,3,4,5,6,7);
   
 void setup() {
    DDRB = DDRB | B00001111;                    // digital pins 8-11 output, to motor
    TIMSK2 = (TIMSK2 & B11111110) | B00000001;  // set up timer2 to interrupt
-   TCCR2B = (TCCR2B & B11111000) | B00000011;  // sets clock divisor /64
+   TCCR2B = (TCCR2B & B11111000) | B00000011;  // set clock divisor /64
    ADMUX = B01100101;  //+5V comparison, left-adjust, adc5
    ADCSRA = B11100110;  //enable, start, auto-run, 
    if (debug) Serial.begin(9600);
@@ -22,7 +26,7 @@ void setup() {
   
 void loop() {
   char buf[5] = "";
-  if (debug)
+  /*if (debug)
   {
     Serial.print("timercount: ");
     Serial.println(timercount);
@@ -36,7 +40,7 @@ void loop() {
       Serial.println(states[pointer]);
       debugflag = LOW;
     }
-  }
+  } */
   lcd.setCursor(0,1);
   lcd.write("Feed: ");
   itoa(64-(ADCH/4), buf, 10);
@@ -46,6 +50,36 @@ void loop() {
   lcd.write(dir ? "Right" : "Left ");
   lcd.setCursor(0,3);
   lcd.write(on ? "On " : "Off");
+  checkDirButton();
+  checkOnButton();
+  
+}
+
+void checkDirButton(void)  // to do: figure out a way of triggering button down and holding off
+{
+  unsigned int readvalue;
+  readvalue = PINB & B00100000;
+  if(debug) { Serial.print("dir Readval: "); Serial.println(readvalue);}
+  if (readvalue == 0 && PrevDirReading == 32 && millis() - DirTime > debounce)
+  {
+    (dir ? dir = LOW : dir = HIGH);
+    DirTime = millis();
+    if (debug) { Serial.print("Dir: "); Serial.println(dir); }
+  }
+  PrevDirReading = readvalue;
+}
+
+void checkOnButton(void)
+{
+  unsigned int readvalue;
+  readvalue = PINB & B00010000;
+  if(debug) { Serial.print("on Readval: "); Serial.println(readvalue);}
+  if (readvalue == 0 && PrevOnReading == 16 && millis() - OnTime > debounce)
+  {
+    (on ? on = LOW : on = HIGH);
+    OnTime = millis();
+  }
+  PrevOnReading = readvalue;
 }
   
   
