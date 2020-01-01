@@ -6,5 +6,8 @@ Operation: ADC set up as free-running, sampling the pot.  Timer2 is set up to in
 ISR, the number of overflows is compared to the requested speed.  On match/exceed, a single step is driven in the desired
 direction.  Drive is via PORTB rather than digitalWrite for speed.  Display shows speed (relative, not absolute), direction,
 and off/on status.
-Current version has direction and enable hard-coded.  To get these running via user controls needs setting Timer0 up as a
-20mS debounce interrupt, or hardware debouncing with an RC filter.
+Pullup pins on D12 and D13 control rotation direction and off/on, through toggle variables with a subtractive 
+millis()-based debounce.
+Hardware is tested and works.
+If the stepper is run at higher speeds (with this setup max is about 100rpm) this will need acceleration/deceleration 
+profiles for reversing and off/on.
